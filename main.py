@@ -1,18 +1,16 @@
 # import logging
 #
-from urllib.parse import urlparse
 
 import cv2
-from bs4 import BeautifulSoup
-
 import numpy as np
-import requests
 import torch
-from torchvision.transforms import transforms
 
+from image_normalization.noise_filtering import NoiseFiltering
+from models.u_net_lung import UNetLung
+from models.u_net_rib import UNetRib
 from rib_suppression import rib_suppression
-from rib_suppression.train import TrainingNet
-from models.u_net import UNet
+import lung_segmentation.utils as lg
+from utils import transforms as tr
 
 # from image_normalization.noise_filtering import NoiseFiltering
 #
@@ -22,7 +20,10 @@ from models.u_net import UNet
 # filter = NoiseFiltering('fluorogram.png')
 # filter()
 
-# path_to_trained_net = 'trained_models/u_net_rib_shadows.pth'
+
+test = 'datasets/pathologies_detection/images/MCUCXR_0001_0.png'
+path_to_trained_lung = 'trained_models/u_net_lung_segmentation.pth'
+path_to_trained_rib = 'trained_models/u_net_rib_shadows.pth'
 # training_config = {
 #     'dataset_path': 'datasets/rib_shadows',
 #     'path_to_trained_net': path_to_trained_net,
@@ -32,19 +33,39 @@ from models.u_net import UNet
 # # training(is_visualize=True)
 #
 #
-# im = 'not_segmented_8.png'
-# mask_lung = 'segmented_8.png'
-# # noise_filter = NoiseFiltering()
+image = cv2.imread(test, cv2.IMREAD_GRAYSCALE)
+image = cv2.resize(image, (512, 512))
+noise_filter = NoiseFiltering()
+image = noise_filter.change(image)
+cv2.imshow('image', image)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+net_lung = UNetLung()
+net_rib = UNetRib()
+net_lung.load_state_dict(torch.load(path_to_trained_lung))
+net_rib.load_state_dict(torch.load(path_to_trained_rib))
+
+image_tensor = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).type(torch.float32).requires_grad_()
+
+lung_mask = net_lung(torch.clone(image_tensor))
+rib_mask = net_rib(torch.clone(image_tensor))
+
+lung_mask = tr.to_binary_np(lung_mask)
+rib_mask = tr.to_binary_np(rib_mask)
+lung_mask = lg.delete_extra_connected_areas(lung_mask)
+
+lung_image = image * lung_mask
+
+# cv2.imshow('lung', lung_mask * 255)
+# cv2.imshow('rib', rib_mask * 255)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+# net_lung.load_state_dict(torch.
 # image = cv2.resize(cv2.imread(im, cv2.IMREAD_GRAYSCALE), (512, 512))
 # mask_lung = cv2.resize(cv2.imread(mask_lung, cv2.IMREAD_GRAYSCALE), (512, 512))
-#
-# image = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).type(torch.float32).requires_grad_()
-#
-# net = UNet()
-# net.load_state_dict(torch.load(path_to_trained_net))
-# mask = net(torch.clone(image))
-# rib_suppression.remove_bones(image, mask, mask_lung)
 
+rib_suppression.remove_bones(image, rib_mask, lung_mask)
 
 # image_url = 'https://data.lhncbc.nlm.nih.gov/public/Tuberculosis-Chest-X-ray-Datasets/Montgomery-County-CXR-Set/MontgomerySet/CXR_png/index.html'
 # left_url = "https://data.lhncbc.nlm.nih.gov/public/Tuberculosis-Chest-X-ray-Datasets/Montgomery-County-CXR-Set/MontgomerySet/ManualMask/leftMask/index.html"
@@ -108,26 +129,26 @@ from models.u_net import UNet
 #
 # # Вывод количества загруженных изображений
 # print(f"Загружено {len(tensor_images)} изображений.")
-
-import os
-import torch as t
-from pathologies_detection.utils.config import opt
-from models.faster_rcnn import FasterRCNNVGG16
-from pathologies_detection.trainer import FasterRCNNTrainer
-from pathologies_detection.data.util import  read_image
-from pathologies_detection.utils.vis_tool import vis_bbox
-from pathologies_detection.utils import array_tool as at
-# %matplotlib inline
-
-img = read_image('datasets/pathologies_detection/images/MCUCXR_0001_0.png', dtype=np.uint8, color=False)
-img = t.from_numpy(img)[None]
-faster_rcnn = FasterRCNNVGG16()
-trainer = FasterRCNNTrainer(faster_rcnn).cpu()
-
-trainer.load('trained_models/chainer_best_model_converted_to_pytorch_0.7053.pth')
-opt.caffe_pretrain=True # this model was trained from caffe-pretrained model
-_bboxes, _labels, _scores = trainer.faster_rcnn.predict(img, visualize=True)
-vis_bbox(at.tonumpy(img[0]),
-         at.tonumpy(_bboxes[0]),
-         at.tonumpy(_labels[0]).reshape(-1),
-         at.tonumpy(_scores[0]).reshape(-1))
+#
+# import torch as t
+# from pathologies_detection.utils.config import opt
+# from models.faster_rcnn import FasterRCNNVGG16
+# from pathologies_detection.trainer import FasterRCNNTrainer
+# from pathologies_detection.data.util import read_image
+# from pathologies_detection.utils.vis_tool import vis_bbox
+# from pathologies_detection.utils import array_tool as at
+#
+# # %matplotlib inline
+#
+# img = read_image('datasets/pathologies_detection/images/MCUCXR_0001_0.png', dtype=np.uint8, color=False)
+# img = t.from_numpy(img)[None]
+# faster_rcnn = FasterRCNNVGG16()
+# trainer = FasterRCNNTrainer(faster_rcnn)
+#
+# trainer.load('trained_models/fasterrcnn_12211511_0.701052458187_torchvision_pretrain.pth')
+# opt.caffe_pretrain = False  # this model was trained from torchvision-pretrained model
+# _bboxes, _labels, _scores = trainer.faster_rcnn.predict(img, visualize=True)
+# vis_bbox(at.tonumpy(img[0]),
+#          at.tonumpy(_bboxes[0]),
+#          at.tonumpy(_labels[0]).reshape(-1),
+#          at.tonumpy(_scores[0]).reshape(-1))

@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from torch import optim, nn
 from torch.utils.data import DataLoader
 
-from models.u_net import UNet
+from models.u_net_rib import UNetRib
 from datasets.rib_shadows import RibShadowsDataset
 from utils.average_meter import AverageMeter, dice_coeff
 
@@ -72,7 +72,7 @@ class TrainingNet:
 
     def load_net(self, net):
         if net is None:
-            net = UNet()
+            net = UNetRib()
             if os.path.isfile(self._training_config.get('path_to_trained_net')):
                 logger.info(
                     'trained net with path %s successfully loaded' % self._training_config.get('path_to_trained_net'))

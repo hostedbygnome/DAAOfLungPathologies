@@ -64,26 +64,6 @@ class _EncoderBlock(nn.Module):
         p = self.pool(x)
         return x, p
 
-
-# class _DecoderBlock(nn.Module):
-#     def __init__(self, in_channels, out_channels):
-#         super(_DecoderBlock, self).__init__()
-#         self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
-#         self.decode = nn.Sequential(
-#             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-#             nn.BatchNorm2d(out_channels),
-#             nn.ReLU(inplace=True),
-#             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
-#             nn.BatchNorm2d(out_channels),
-#             nn.ReLU(inplace=True),
-#         )
-#
-#     def forward(self, inputs, skip):
-#         x = self.up(inputs)
-#         x = torch.cat([x, skip], dim=1)
-#         x = self.decode(x)
-#         return x
-
 class _DecoderBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(_DecoderBlock, self).__init__()
@@ -97,9 +77,9 @@ class _DecoderBlock(nn.Module):
         return x
 
 
-class UNet(nn.Module):
+class UNetRib(nn.Module):
     def __init__(self):
-        super(UNet, self).__init__()
+        super(UNetRib, self).__init__()
         self.enc1 = _EncoderBlock(1, 64)
         self.enc2 = _EncoderBlock(64, 128)
         self.enc3 = _EncoderBlock(128, 256)
@@ -126,16 +106,10 @@ class UNet(nn.Module):
         s3, p3 = self.enc3(p2)
         s4, p4 = self.enc4(p3)
         center = self.center(p4)
-        # dec4 = self.dec4(torch.cat([center, nn_func.upsample(enc4, center.size()[2:], mode='bilinear')], 1))
-        # dec3 = self.dec3(torch.cat([dec4, nn_func.upsample(enc3, dec4.size()[2:], mode='bilinear')], 1))
-        # dec2 = self.dec2(torch.cat([dec3, nn_func.upsample(enc2, dec3.size()[2:], mode='bilinear')], 1))
-        # dec1 = self.dec1(torch.cat([dec2, nn_func.upsample(enc1, dec2.size()[2:], mode='bilinear')], 1))
+
         d4 = self.dec4(center, s4)
         d3 = self.dec3(d4, s3)
         d2 = self.dec2(d3, s2)
         d1 = self.dec1(d2, s1)
-        # out = nn_func.softmax(self.out(d1), dim=-2)
         out = nn_func.sigmoid(self.out(d1))
-        # out = self.out(d1)
         return out
-        # return nn_func.interpolate(out, size=x.size()[2:], mode='bilinear')

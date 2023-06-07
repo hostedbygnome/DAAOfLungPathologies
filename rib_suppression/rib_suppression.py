@@ -2,30 +2,21 @@ import math
 
 import cv2
 import numpy as np
-import torch
 
 
-def remove_bones(image, mask, lung_image):
-    mask = (mask > 0.5).type(torch.uint8)
-    lung_mask = np.where(lung_image > 0, 1, 0)
-    mask_np = mask.squeeze().squeeze().detach().numpy().astype(np.uint8) * lung_mask
+def remove_bones(image, mask, lung_mask):
+    mask_np = mask * image * lung_mask
     mask_np_inv = 1 - mask_np
+
+    lung_image = image * lung_mask
 
     ret, binary_mask = cv2.threshold(mask_np.astype(np.uint8), 0, 255, cv2.THRESH_BINARY)
 
     # Поиск контуров на маске
     contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Создание нового изображения для отрисовки контуров
-    # image_with_contours = cv2.cvtColor(binary_mask, cv2.COLOR_GRAY2BGR)
     filtered_countours = list(filter(lambda c: cv2.contourArea(c) >= 1000, contours))
-    #
-    # # Отрисовка контуров на изображении
-    # cv2.drawContours(image_with_contours, filtered_countours, -1, (0, 255, 0), 2)
-    # # Отображение и сохранение результата
-    # cv2.imshow('Contours', image_with_contours)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+
     out = np.copy(lung_image).astype(np.float64)
     contour_masks = []
     for contour in filtered_countours:
@@ -44,12 +35,9 @@ def remove_bones(image, mask, lung_image):
         rib = contour_mask * lung_image
         rib_mask = np.where(contour_mask * lung_image > 0, 1, 0)
 
-        # rib_without_border = cv2.erode(src=rib, kernel=kernel_erode_mask, iterations=1)
-        # rib_without_border_mask = np.where(cv2.erode(src=contour_mask, kernel=kernel_erode_mask, iterations=1) * mask_lung > 0, 1, 0)
-        # rib_border = rib - rib_without_border
         rib_mean_val = np.mean(rib[rib > 0])
         rib_around_mean_val = np.mean(aroud_rib[np.logical_and(0 < aroud_rib, aroud_rib < 240)])
-        print(rib_mean_val, rib_around_mean_val)
+        # print(rib_mean_val, rib_around_mean_val)
         nonzero_indexes = np.nonzero(rib_mask)
         rib_intensity = abs(rib_around_mean_val - rib_mean_val) * rib_around_mean_val / rib_mean_val
         y_max_mask = np.max(nonzero_indexes[0])
@@ -57,8 +45,8 @@ def remove_bones(image, mask, lung_image):
         x_max_mask = np.max(nonzero_indexes[1])
         x_min_mask = np.min(nonzero_indexes[1])
         points = np.sum(rib_mask)
-        print(points)
-        print(rib_intensity)
+        # print(points)
+        # print(rib_intensity)
         count = 0
         for j in range(y_min_mask, y_max_mask + 1):
             for k in range(x_min_mask, x_max_mask + 1):
@@ -76,13 +64,10 @@ def remove_bones(image, mask, lung_image):
                     else:
                         # print(math.sqrt((c - localiz) ** 2))
                         koef = math.sqrt((c - localiz) ** 2)
-                        print(localiz / c)
+                        # print(localiz / c)
                         if localiz - c < 1:
                             koef = localiz / c
 
-                        # print
-                        # out[j, k] = max(out[j, k] - rib_intensity / max(math.sqrt((c - localiz) ** 2), 1), np.mean(aroud_rib))
-                        # print('old val = ', out[j, k])
                         out[j, k] = max(out[j, k] - rib_intensity / koef, np.min(aroud_rib))
                         # print('new val = ', out[j, k])
 
@@ -91,7 +76,7 @@ def remove_bones(image, mask, lung_image):
         # out[rib_without_border_mask > 0] = np.maximum(mask_lung - rib_intensity, np.min(aroud_rib))[
         #     rib_without_border_mask > 0]
         # out[rib_border > 0] = np.maximum(np.mean(aroud_rib))
-        print(points == count)
+        # print(points == count)
         # cv2.imshow(f'Contour {i}', (rib_mask * 255).astype(np.uint8))
         # cv2.imshow(f'Rib {i}', rib)
         # cv2.waitKey(0)
@@ -104,81 +89,81 @@ def remove_bones(image, mask, lung_image):
     cv2.imshow('test', mask_np.astype(np.uint8) * 255)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-    erode_window_size = 4
-    dilate_window_size = 1
-    kernel_erode_mask = np.ones((erode_window_size, erode_window_size), np.uint8)
-    kernel_dilate_mask = np.ones((dilate_window_size, dilate_window_size), np.uint8)
-    erode_mask_np = cv2.erode(src=mask_np, kernel=kernel_erode_mask, iterations=1)
-    # dilate_mask_np = cv2.dilate(src=mask_np, kernel=kernel_dilate_mask, iterations=1)
-    # rib_borders = dilate_mask_np - erode_mask_np
-    # rib_borders_inv = 1 - rib_borders
-    mask_np_without_borders = mask_np * erode_mask_np
-    mask_np_only_borders = mask_np - erode_mask_np
-    mask_np_without_borders_inv = 1 - mask_np_without_borders
-
-    image_np = image.squeeze().squeeze().detach().numpy().astype(np.uint8)
-    image_only_ribs = image_np * mask_np
-    image_without_ribs = image_np * mask_np_inv
-
-    image_lung_only_ribs = lung_image * mask_np
-    image_lung_without_ribs = lung_image * mask_np_inv
-
-    mean_val_lung_only_ribs = np.mean(image_lung_only_ribs[image_lung_only_ribs > 0])
-    mean_val_lung_without_ribs = np.mean(image_lung_without_ribs[image_lung_without_ribs > 0])
-    mean_val_rib = mean_val_lung_only_ribs - mean_val_lung_without_ribs
-    print(mean_val_rib)
-
-    max_val_lung_only_ribs = np.max(image_lung_only_ribs)
-    max_val_lung_without_ribs = np.max(image_lung_without_ribs)
-    min_val_lung_only_ribs = np.min(image_lung_only_ribs)
-    min_val_lung_without_ribs = np.min(image_lung_without_ribs)
-    mean_val_max_rib = max_val_lung_only_ribs - max_val_lung_without_ribs
-    mean_val_min_rib = min_val_lung_only_ribs - min_val_lung_without_ribs
-
-    out = np.copy(image_np)
-    window_size = 8
-    window_shape = (window_size, window_size)
-    for i in range(out.shape[0]):
-        for j in range(out.shape[1]):
-            if mask_np_without_borders[i, j] == 1:
-                window = image_np[
-                         max(i - window_size // 2, 0): min(i + window_size // 2 + 1, image_np.shape[0]),
-                         max(j - window_size // 2, 0): min(j + window_size // 2 + 1, image_np.shape[1])]
-                k = np.max(window) / np.min(window) / 4
-                # k = np.median(window)
-                # k = mean_val_rib
-                std = np.std(window)
-                median = np.median(window)
-                # k = mean_val_rib + median / std
-                # print("s %.5f" % std)
-                # print("m %.5f" % median)
-                out[i, j] = max((out[i, j] - mean_val_rib * k), min_val_lung_without_ribs)
-                # out[i, j] *= k
-    window_size = 5
-    out2 = np.copy(out)
-    for i in range(out.shape[0]):
-        for j in range(out.shape[1]):
-            if mask_np_only_borders[i, j] == 1:
-                window = out2[
-                         max(i - window_size // 2, 0): min(i + window_size // 2 + 1, image_np.shape[0]),
-                         max(j - window_size // 2, 0): min(j + window_size // 2 + 1, image_np.shape[1])]
-                # k = out[i, j] / np.max(window)
-                # k = np.median(window) - mean_val_rib
-                # k = mean_val_rib
-                # std = np.std(window)
-                # print(out[i, j])
-                median = np.median(window)
-                # k = mean_val_rib + median / std
-                # print("s %.5f" % std)
-                # print("m %.5f" % median)
-                out[i, j] = median
-                # out[i, j] *= k
-    cv2.imshow('test1', image_np)
-    cv2.imshow('test', out)
-    cv2.imshow('test', mask_np * 255)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    return out
+    # erode_window_size = 4
+    # dilate_window_size = 1
+    # kernel_erode_mask = np.ones((erode_window_size, erode_window_size), np.uint8)
+    # kernel_dilate_mask = np.ones((dilate_window_size, dilate_window_size), np.uint8)
+    # erode_mask_np = cv2.erode(src=mask_np, kernel=kernel_erode_mask, iterations=1)
+    # # dilate_mask_np = cv2.dilate(src=mask_np, kernel=kernel_dilate_mask, iterations=1)
+    # # rib_borders = dilate_mask_np - erode_mask_np
+    # # rib_borders_inv = 1 - rib_borders
+    # mask_np_without_borders = mask_np * erode_mask_np
+    # mask_np_only_borders = mask_np - erode_mask_np
+    # mask_np_without_borders_inv = 1 - mask_np_without_borders
+    #
+    # image_np = image.squeeze().squeeze().detach().numpy().astype(np.uint8)
+    # image_only_ribs = image_np * mask_np
+    # image_without_ribs = image_np * mask_np_inv
+    #
+    # image_lung_only_ribs = lung_image * mask_np
+    # image_lung_without_ribs = lung_image * mask_np_inv
+    #
+    # mean_val_lung_only_ribs = np.mean(image_lung_only_ribs[image_lung_only_ribs > 0])
+    # mean_val_lung_without_ribs = np.mean(image_lung_without_ribs[image_lung_without_ribs > 0])
+    # mean_val_rib = mean_val_lung_only_ribs - mean_val_lung_without_ribs
+    # print(mean_val_rib)
+    #
+    # max_val_lung_only_ribs = np.max(image_lung_only_ribs)
+    # max_val_lung_without_ribs = np.max(image_lung_without_ribs)
+    # min_val_lung_only_ribs = np.min(image_lung_only_ribs)
+    # min_val_lung_without_ribs = np.min(image_lung_without_ribs)
+    # mean_val_max_rib = max_val_lung_only_ribs - max_val_lung_without_ribs
+    # mean_val_min_rib = min_val_lung_only_ribs - min_val_lung_without_ribs
+    #
+    # out = np.copy(image_np)
+    # window_size = 8
+    # window_shape = (window_size, window_size)
+    # for i in range(out.shape[0]):
+    #     for j in range(out.shape[1]):
+    #         if mask_np_without_borders[i, j] == 1:
+    #             window = image_np[
+    #                      max(i - window_size // 2, 0): min(i + window_size // 2 + 1, image_np.shape[0]),
+    #                      max(j - window_size // 2, 0): min(j + window_size // 2 + 1, image_np.shape[1])]
+    #             k = np.max(window) / np.min(window) / 4
+    #             # k = np.median(window)
+    #             # k = mean_val_rib
+    #             std = np.std(window)
+    #             median = np.median(window)
+    #             # k = mean_val_rib + median / std
+    #             # print("s %.5f" % std)
+    #             # print("m %.5f" % median)
+    #             out[i, j] = max((out[i, j] - mean_val_rib * k), min_val_lung_without_ribs)
+    #             # out[i, j] *= k
+    # window_size = 5
+    # out2 = np.copy(out)
+    # for i in range(out.shape[0]):
+    #     for j in range(out.shape[1]):
+    #         if mask_np_only_borders[i, j] == 1:
+    #             window = out2[
+    #                      max(i - window_size // 2, 0): min(i + window_size // 2 + 1, image_np.shape[0]),
+    #                      max(j - window_size // 2, 0): min(j + window_size // 2 + 1, image_np.shape[1])]
+    #             # k = out[i, j] / np.max(window)
+    #             # k = np.median(window) - mean_val_rib
+    #             # k = mean_val_rib
+    #             # std = np.std(window)
+    #             # print(out[i, j])
+    #             median = np.median(window)
+    #             # k = mean_val_rib + median / std
+    #             # print("s %.5f" % std)
+    #             # print("m %.5f" % median)
+    #             out[i, j] = median
+    #             # out[i, j] *= k
+    # cv2.imshow('test1', image_np)
+    # cv2.imshow('test', out)
+    # cv2.imshow('test', mask_np * 255)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+    # return out
 # def remove_bones(image, mask, mask_lung):
 #     mask = torch.where(mask > 0.5, 1, 0).type(torch.uint8)
 #     # kernel_size = 5
