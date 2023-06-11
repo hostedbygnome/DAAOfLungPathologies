@@ -84,11 +84,12 @@ def remove_bones(image, mask, lung_mask):
         # cv2.imshow(f'Rf', out.astype(np.uint8))
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
-    cv2.imshow('test1', lung_image)
-    cv2.imshow('test2', out.astype(np.uint8))
-    cv2.imshow('test', mask_np.astype(np.uint8) * 255)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow('test1', lung_image)
+    # cv2.imshow('test2', out.astype(np.uint8))
+    # cv2.imshow('test', mask_np.astype(np.uint8) * 255)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+    return out.astype(np.uint8)
     # erode_window_size = 4
     # dilate_window_size = 1
     # kernel_erode_mask = np.ones((erode_window_size, erode_window_size), np.uint8)

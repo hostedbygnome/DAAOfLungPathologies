@@ -1,6 +1,5 @@
-import torch
+import torch as t
 import torch.nn as nn
-import torch.nn.functional as nn_func
 
 
 class _ConvBlock(nn.Module):
@@ -72,7 +71,7 @@ class _DecoderBlock(nn.Module):
 
     def forward(self, inputs, skip):
         x = self.up(inputs)
-        x = torch.cat([x, skip], 1)
+        x = t.cat([x, skip], 1)
         x = self.d_conv(x)
         return x
 
@@ -111,5 +110,5 @@ class UNetRib(nn.Module):
         d3 = self.dec3(d4, s3)
         d2 = self.dec2(d3, s2)
         d1 = self.dec1(d2, s1)
-        out = nn_func.sigmoid(self.out(d1))
+        out = t.sigmoid(self.out(d1))
         return out
